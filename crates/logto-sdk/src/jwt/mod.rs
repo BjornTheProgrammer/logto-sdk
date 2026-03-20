@@ -1,8 +1,8 @@
-use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
+use jsonwebtoken::{DecodingKey, Validation, decode, decode_header, jwk::JwkSet};
 use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::jwt::auth::{AuthInfo, AuthorizationError, ISSUER, JWKS_URI};
+use crate::jwt::auth::{AuthInfo, AuthorizationError};
 
 pub mod auth;
 
@@ -10,41 +10,64 @@ pub trait PayloadVerifier: Send + Sync {
     fn verify_payload(&self, claims: &Value) -> Result<(), AuthorizationError>;
 }
 
+#[derive(Debug, Clone)]
+pub struct JwtValidatorConfig {
+    pub jwks_uri: String,
+    pub issuer: String,
+}
+
+impl JwtValidatorConfig {
+    pub fn new(jwks_uri: impl Into<String>, issuer: impl Into<String>) -> Self {
+        Self {
+            jwks_uri: jwks_uri.into(),
+            issuer: issuer.into(),
+        }
+    }
+
+    pub fn with_tenant_id(tenant_id: impl AsRef<str>) -> Self {
+        let tenant_id = tenant_id.as_ref();
+        Self {
+            jwks_uri: format!("https://{tenant_id}.logto.app/oidc/jwks"),
+            issuer: format!("https://{tenant_id}.logto.app/oidc"),
+        }
+    }
+}
+
 pub struct JwtValidator {
     pub jwks: HashMap<String, DecodingKey>,
     verifier: Box<dyn PayloadVerifier>,
+    pub config: JwtValidatorConfig,
 }
 
 impl JwtValidator {
-    pub async fn new(verifier: Box<dyn PayloadVerifier>) -> Result<Self, AuthorizationError> {
-        let jwks = Self::fetch_jwks().await?;
-        Ok(Self { jwks, verifier })
+    pub async fn new(
+        config: JwtValidatorConfig,
+        verifier: Box<dyn PayloadVerifier>,
+    ) -> Result<Self, AuthorizationError> {
+        let jwks = Self::fetch_jwks(&config.jwks_uri).await?;
+        Ok(Self {
+            config,
+            jwks,
+            verifier,
+        })
     }
 
-    async fn fetch_jwks() -> Result<HashMap<String, DecodingKey>, AuthorizationError> {
-        let response = reqwest::get(JWKS_URI).await.map_err(|e| {
+    async fn fetch_jwks(
+        jwks_uri: impl AsRef<str>,
+    ) -> Result<HashMap<String, DecodingKey>, AuthorizationError> {
+        let response = reqwest::get(jwks_uri.as_ref()).await.map_err(|e| {
             AuthorizationError::with_status(format!("Failed to fetch JWKS: {}", e), 401)
         })?;
 
-        let jwks: Value = response.json().await.map_err(|e| {
+        let jwk_set: JwkSet = response.json().await.map_err(|e| {
             AuthorizationError::with_status(format!("Failed to parse JWKS: {}", e), 401)
         })?;
 
         let mut keys = HashMap::new();
-
-        if let Some(keys_array) = jwks["keys"].as_array() {
-            for key in keys_array {
-                if let (Some(kid), Some(kty), Some(n), Some(e)) = (
-                    key["kid"].as_str(),
-                    key["kty"].as_str(),
-                    key["n"].as_str(),
-                    key["e"].as_str(),
-                ) {
-                    if kty == "RSA" {
-                        if let Ok(decoding_key) = DecodingKey::from_rsa_components(n, e) {
-                            keys.insert(kid.to_string(), decoding_key);
-                        }
-                    }
+        for jwk in &jwk_set.keys {
+            if let Some(kid) = &jwk.common.key_id {
+                if let Ok(dk) = DecodingKey::from_jwk(jwk) {
+                    keys.insert(kid.clone(), dk);
                 }
             }
         }
@@ -73,8 +96,9 @@ impl JwtValidator {
             .get(&kid)
             .ok_or_else(|| AuthorizationError::with_status("Unknown key ID", 401))?;
 
-        let mut validation = Validation::new(Algorithm::RS256);
-        validation.set_issuer(&[ISSUER]);
+        let mut validation = Validation::new(header.alg);
+
+        validation.set_issuer(&[&self.config.issuer]);
         validation.validate_aud = false; // We'll verify audience manually
 
         let token_data = decode::<Value>(token, key, &validation)

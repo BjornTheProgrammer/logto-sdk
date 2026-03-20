@@ -1,6 +1,4 @@
 use reqwest::Client;
-use serde::Deserialize;
-use thiserror::Error;
 
 use crate::auth_client::{CachedToken, LogtoAuthClient};
 

@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-pub const JWKS_URI: &str = "https://your-tenant.logto.app/oidc/jwks";
-pub const ISSUER: &str = "https://your-tenant.logto.app/oidc";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthInfo {
     pub sub: String,

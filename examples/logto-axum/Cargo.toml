@@ -1,12 +1,12 @@
 [package]
 name = "logto-axum"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+publish = false
 
 [dependencies]
 logto-sdk = { path = "../../crates/logto-sdk", features = ["axum"] }
 axum = { workspace = true }
 tokio = { workspace = true }
 tower-http = { version = "0.6", features = ["cors"] }
-serde = { workspace = true }
 serde_json = { workspace = true }

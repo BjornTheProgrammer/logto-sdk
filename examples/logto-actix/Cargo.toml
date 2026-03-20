@@ -1,0 +1,12 @@
+[package]
+name = "logto-actix"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+logto-sdk = { path = "../../crates/logto-sdk", features = ["actix-web"] }
+actix-web = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

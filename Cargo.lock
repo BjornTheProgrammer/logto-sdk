@@ -1610,12 +1610,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
+name = "logto-actix"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "logto-sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "logto-axum"
 version = "0.1.0"
 dependencies = [
  "axum",
  "logto-sdk",
- "serde",
  "serde_json",
  "tokio",
  "tower-http",
@@ -1626,9 +1636,17 @@ name = "logto-grant-token"
 version = "0.1.0"
 dependencies = [
  "logto-sdk",
+ "tokio",
+]
+
+[[package]]
+name = "logto-rocket"
+version = "0.1.0"
+dependencies = [
+ "logto-sdk",
+ "rocket",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -2318,6 +2336,7 @@ dependencies = [
  "rocket_codegen",
  "rocket_http",
  "serde",
+ "serde_json",
  "state",
  "tempfile",
  "time",

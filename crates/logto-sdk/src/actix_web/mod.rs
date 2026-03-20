@@ -1,12 +1,42 @@
 use actix_web::{
     Error, HttpMessage, HttpResponse,
     body::EitherBody,
-    dev::{Service, ServiceRequest, ServiceResponse, forward_ready},
+    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
 };
-use futures::future::LocalBoxFuture;
+use futures::future::{LocalBoxFuture, Ready, ok};
 use std::{rc::Rc, sync::Arc};
 
 use crate::jwt::{JwtValidator, auth::extract_bearer_token};
+
+pub struct JwtMiddleware {
+    validator: Arc<JwtValidator>,
+}
+
+impl JwtMiddleware {
+    pub fn new(validator: Arc<JwtValidator>) -> Self {
+        Self { validator }
+    }
+}
+
+impl<S, B> Transform<S, ServiceRequest> for JwtMiddleware
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<EitherBody<B>>;
+    type Error = Error;
+    type InitError = ();
+    type Transform = JwtMiddlewareService<S>;
+    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        ok(JwtMiddlewareService {
+            service: Rc::new(service),
+            validator: self.validator.clone(),
+        })
+    }
+}
 
 pub struct JwtMiddlewareService<S> {
     service: Rc<S>,

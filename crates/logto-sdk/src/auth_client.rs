@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
 use reqwest::Client;
 use serde::Deserialize;
@@ -35,7 +38,7 @@ pub enum LogtoAuthError {
     Json(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct TokenResponse {
     /// Use this value for accessing the Logto Management API
     pub access_token: String,
@@ -100,7 +103,7 @@ impl TokenWithExpiry {
 /// Caches the auth token and gives a new one if there is no valid token
 pub struct CachedToken {
     pub auth_client: LogtoAuthClient,
-    pub token: Option<TokenWithExpiry>,
+    pub token: Mutex<Option<TokenWithExpiry>>,
     pub token_recieved: Instant,
     pub safety_buffer: Duration,
 }
@@ -109,15 +112,22 @@ impl CachedToken {
     pub fn new(auth_client: LogtoAuthClient) -> Self {
         Self {
             auth_client,
-            token: None,
+            token: Mutex::new(None),
             token_recieved: Instant::now(),
             safety_buffer: Duration::from_secs(1),
         }
     }
 
     /// Token is garunteed to be valid for at least 1 second
-    pub async fn get_valid_token(&mut self) -> Result<&TokenResponse, LogtoAuthError> {
-        let needs_refresh = self.token.as_ref().is_none_or(|t| t.is_expired());
+    pub async fn get_valid_token(&self) -> Result<TokenResponse, LogtoAuthError> {
+        let mut guard = self.token.lock().unwrap();
+
+        let needs_refresh = self
+            .token
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_none_or(|t| t.is_expired());
 
         if needs_refresh {
             let start = Instant::now();
@@ -128,12 +138,12 @@ impl CachedToken {
                 - elapsed
                 - self.safety_buffer;
 
-            self.token = Some(TokenWithExpiry {
+            *guard = Some(TokenWithExpiry {
                 token: token_response,
                 expires_at,
             });
         }
 
-        Ok(&self.token.as_ref().unwrap().token)
+        Ok(guard.as_ref().unwrap().token.clone())
     }
 }

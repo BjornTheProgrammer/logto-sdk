@@ -5,16 +5,25 @@ use serde::Deserialize;
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
-pub struct M2MCredentials {
+pub struct M2mCredentials {
     pub client_id: String,
     pub client_secret: String,
 }
 
+impl M2mCredentials {
+    pub fn new(client_id: impl Into<String>, client_secret: impl Into<String>) -> Self {
+        Self {
+            client_id: client_id.into(),
+            client_secret: client_secret.into(),
+        }
+    }
+}
+
 pub struct LogtoAuthClient {
     pub http: Client,
-    pub base_url: String,
+    pub token_endpoint: String,
     pub resource: String,
-    pub credentials: M2MCredentials,
+    pub credentials: M2mCredentials,
     pub scopes: Vec<String>,
 }
 
@@ -35,32 +44,33 @@ pub struct TokenResponse {
     /// Token type for your request when using the access token
     pub token_type: String,
     /// Scope for Logto Management API
-    pub scope: String,
+    pub scope: Option<String>,
 }
 
 impl LogtoAuthClient {
     pub fn new(
         tenant_id: impl AsRef<str>,
-        credentials: M2MCredentials,
-        scopes: Vec<String>,
+        credentials: M2mCredentials,
+        scopes: Vec<impl Into<String>>,
     ) -> Self {
-        let tenant_id = tenant_id.as_ref().to_owned();
+        let tenant_id = tenant_id.as_ref();
         let base_url = format!("https://{}.logto.app", tenant_id);
+        let token_endpoint = format!("{}/oidc/token", base_url);
         let resource = format!("{}/api", base_url);
 
         Self {
             http: Client::new(),
-            base_url,
+            token_endpoint,
             resource,
             credentials,
-            scopes,
+            scopes: scopes.into_iter().map(|scope| scope.into()).collect(),
         }
     }
 
     pub async fn get_access_token(&self) -> Result<TokenResponse, LogtoAuthError> {
-        Ok(self
+        let response = self
             .http
-            .post(format!("{}/oidc/token", self.base_url))
+            .post(&self.token_endpoint)
             .form(&[
                 ("grant_type", "client_credentials"),
                 ("client_id", &self.credentials.client_id),
@@ -68,12 +78,11 @@ impl LogtoAuthClient {
                 ("resource", &self.resource),
                 ("scope", &self.scopes.join(" ")),
             ])
-            .header("Content-Type", "application/x-www-form-urlencoded")
             .send()
             .await?
-            .error_for_status()?
-            .json::<TokenResponse>()
-            .await?)
+            .error_for_status()?;
+
+        Ok(response.json::<TokenResponse>().await?)
     }
 }
 

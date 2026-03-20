@@ -44,6 +44,8 @@ impl JwtValidator {
         config: JwtValidatorConfig,
         verifier: Box<dyn PayloadVerifier>,
     ) -> Result<Self, AuthorizationError> {
+        let _ = jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.install_default();
+
         let jwks = Self::fetch_jwks(&config.jwks_uri).await?;
         Ok(Self {
             config,
@@ -138,6 +140,18 @@ impl JwtValidator {
 pub struct GlobalApiResourceVerifier {
     pub audience: String,
     pub required_scopes: Vec<String>,
+}
+
+impl GlobalApiResourceVerifier {
+    pub fn new(audience: impl Into<String>, required_scopes: Vec<impl Into<String>>) -> Self {
+        Self {
+            audience: audience.into(),
+            required_scopes: required_scopes
+                .into_iter()
+                .map(|scope| scope.into())
+                .collect(),
+        }
+    }
 }
 
 impl PayloadVerifier for GlobalApiResourceVerifier {

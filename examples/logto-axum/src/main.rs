@@ -11,11 +11,11 @@ use tower_http::cors::CorsLayer;
 async fn main() {
     let validator = Arc::new(
         JwtValidator::new(
-            JwtValidatorConfig::with_tenant_id("xxxxxx"), // Set the tenant id here or there will be a panic
-            Box::new(GlobalApiResourceVerifier {
-                audience: "https://your-api-resource-indicator".to_string(),
-                required_scopes: vec!["api:read".to_string(), "api:write".to_string()],
-            }),
+            JwtValidatorConfig::with_tenant_id("XXXXXX"), // Set the tenant id here or there will be a panic
+            Box::new(GlobalApiResourceVerifier::new(
+                "https://XXXXXX.logto.app/api",
+                vec!["all"],
+            )),
         )
         .await
         .expect("Failed to initialize JWT validator"),

@@ -1,0 +1,41 @@
+[package]
+name = "logto-sdk"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Unofficial Logto SDK for Rust with support for axum, actix, and rocket"
+readme = "../README.md"
+keywords = ["logto", "sdk", "axum", "actix", "rocket"]
+categories = ["api-bindings", "authentication"]
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = ["management-api", "jwt", "auth-client"]
+
+management-api = ["auth-client"]
+auth-client = []
+
+axum = ["jwt", "dep:axum"]
+actix-web = ["jwt", "dep:actix-web", "dep:futures"]
+rocket = ["jwt", "dep:rocket"]
+
+jwt = ["dep:jsonwebtoken"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+actix-web = { workspace = true, optional = true }
+rocket = { workspace = true, optional = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+jsonwebtoken = { workspace = true, optional = true }
+
+futures = { workspace = true, optional = true }
+reqwest = { workspace = true }
+thiserror = { workspace = true }

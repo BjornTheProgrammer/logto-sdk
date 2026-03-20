@@ -110,3 +110,37 @@ impl JwtValidator {
         )
     }
 }
+
+pub struct GlobalApiResourceVerifier {
+    pub audience: String,
+    pub required_scopes: Vec<String>,
+}
+
+impl PayloadVerifier for GlobalApiResourceVerifier {
+    fn verify_payload(&self, claims: &Value) -> Result<(), AuthorizationError> {
+        // Check audience claim matches your API resource indicator
+        let audiences = match &claims["aud"] {
+            Value::Array(arr) => arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>(),
+            Value::String(s) => vec![s.as_str()],
+            _ => vec![],
+        };
+
+        if !audiences.contains(&self.audience.as_str()) {
+            return Err(AuthorizationError::new("Invalid audience"));
+        }
+
+        // Check required scopes for global API resources
+        let scopes = claims["scope"]
+            .as_str()
+            .map(|s| s.split(' ').collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        for required_scope in &self.required_scopes {
+            if !scopes.contains(&required_scope.as_str()) {
+                return Err(AuthorizationError::new("Insufficient scope"));
+            }
+        }
+
+        Ok(())
+    }
+}

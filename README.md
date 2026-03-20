@@ -34,6 +34,9 @@ async fn main() {
 }
 ```
 
+The management api is still under developement. If you need a certain functionality, don't hesitate to create
+an issue or make a PR!
+
 ## Usage as Middleware
 
 Now that you have `logto-sdk` added as a dependency, you can very easily add a middleware

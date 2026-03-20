@@ -1,0 +1,47 @@
+name: Clippy
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    clippy:
+        name: Clippy
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: clippy
+
+            - name: Cache cargo registry
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/registry
+                      ~/.cargo/git
+                      target
+                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+                  restore-keys: ${{ runner.os }}-cargo-
+
+            - name: Clippy (default features)
+              run: cargo clippy -p logto-sdk -- -D warnings
+
+            - name: Clippy (actix-web)
+              run: cargo clippy -p logto-sdk --features actix-web -- -D warnings
+
+            - name: Clippy (axum)
+              run: cargo clippy -p logto-sdk --features axum -- -D warnings
+
+            - name: Clippy (rocket)
+              run: cargo clippy -p logto-sdk --features rocket -- -D warnings
+
+            - name: Clippy (examples)
+              run: cargo clippy -p logto-actix -p logto-axum -p logto-rocket -p logto-grant-token -- -D warnings

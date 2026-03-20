@@ -117,7 +117,7 @@ impl CachedToken {
 
     /// Token is garunteed to be valid for at least 1 second
     pub async fn get_valid_token(&mut self) -> Result<&TokenResponse, LogtoAuthError> {
-        let needs_refresh = self.token.as_ref().map_or(true, |t| t.is_expired());
+        let needs_refresh = self.token.as_ref().is_none_or(|t| t.is_expired());
 
         if needs_refresh {
             let start = Instant::now();

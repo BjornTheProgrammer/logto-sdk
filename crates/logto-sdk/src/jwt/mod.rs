@@ -67,10 +67,10 @@ impl JwtValidator {
 
         let mut keys = HashMap::new();
         for jwk in &jwk_set.keys {
-            if let Some(kid) = &jwk.common.key_id {
-                if let Ok(dk) = DecodingKey::from_jwk(jwk) {
-                    keys.insert(kid.clone(), dk);
-                }
+            if let Some(kid) = &jwk.common.key_id
+                && let Ok(dk) = DecodingKey::from_jwk(jwk)
+            {
+                keys.insert(kid.clone(), dk);
             }
         }
 

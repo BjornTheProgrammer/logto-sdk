@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build main crate (default features)
+        run: cargo build -p logto-sdk
+
+      - name: Build main crate (actix-web)
+        run: cargo build -p logto-sdk --features actix-web
+
+      - name: Build main crate (axum)
+        run: cargo build -p logto-sdk --features axum
+
+      - name: Build main crate (rocket)
+        run: cargo build -p logto-sdk --features rocket
+
+      - name: Build examples
+        run: cargo build -p logto-actix -p logto-axum -p logto-rocket -p logto-grant-token

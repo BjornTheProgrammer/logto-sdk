@@ -18,4 +18,4 @@ You can use the `logto-sdk` to get access tokens as well as use the management a
 ## Usage as Middleware
 
 Now that you have `logto-sdk` added as a dependency, you can very easily add a middleware
-your framework.
+your framework. There are examples for each web framework in the examples directory.

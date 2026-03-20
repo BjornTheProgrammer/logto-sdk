@@ -11,7 +11,7 @@ use tower_http::cors::CorsLayer;
 async fn main() {
     let validator = Arc::new(
         JwtValidator::new(
-            JwtValidatorConfig::with_tenant_id("xxxxx"), // Set the tenant id here or there will be a panic
+            JwtValidatorConfig::with_tenant_id("xxxxxx"), // Set the tenant id here or there will be a panic
             Box::new(GlobalApiResourceVerifier {
                 audience: "https://your-api-resource-indicator".to_string(),
                 required_scopes: vec!["api:read".to_string(), "api:write".to_string()],
@@ -21,16 +21,25 @@ async fn main() {
         .expect("Failed to initialize JWT validator"),
     );
 
-    let app = Router::new()
+    let protected_routes = Router::new()
         .route("/api/protected", get(protected_handler))
         .layer(middleware::from_fn(
             jwt_middleware::<GlobalApiResourceVerifier>,
-        ))
+        ));
+
+    let app = Router::new()
+        .route("/", get(public_handler))
+        .merge(protected_routes)
         .layer(Extension(validator))
         .layer(CorsLayer::permissive());
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    println!("Listening on http://localhost:3000/");
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn public_handler() -> Json<Value> {
+    Json(json!({ "status": 200 }))
 }
 
 async fn protected_handler(Extension(auth): Extension<AuthInfo>) -> Json<Value> {

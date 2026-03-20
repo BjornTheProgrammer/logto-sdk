@@ -1,0 +1,28 @@
+name: publish
+
+on:
+    push:
+        tags:
+            - "v*"
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Install dependencies
+              run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
+            - name: Build workspace
+              run: cargo build --workspace
+
+            - name: Test workspace
+              run: cargo test --workspace
+
+            - name: Publish workspace to crates.io
+              run: cargo publish --workspace --token ${{ secrets.CRATES_IO_API_TOKEN }}

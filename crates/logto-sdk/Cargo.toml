@@ -7,7 +7,7 @@ edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
 description = "Unofficial Logto SDK for Rust with support for axum, actix, and rocket"
-readme = "../README.md"
+readme = "../../README.md"
 keywords = ["logto", "sdk", "axum", "actix", "rocket"]
 categories = ["api-bindings", "authentication"]
 

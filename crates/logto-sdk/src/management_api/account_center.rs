@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::{auth_client::LogtoAuthError, management_api::LogtoClient};
+use crate::management_api::{LogtoClient, ManagementApiError, ResponseExt};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,16 +40,18 @@ pub struct AccountCenter<'a> {
 }
 
 impl<'a> AccountCenter<'a> {
-    pub async fn get(&self) -> Result<AccountCenterSettings, LogtoAuthError> {
-        Ok(self
-            .client
+    pub async fn get(&self) -> Result<AccountCenterSettings, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+
+        self.client
             .http
             .get(format!("{}/account-center", self.client.base_url()))
-            .bearer_auth(self.client.get_valid_token().await?.access_token)
+            .bearer_auth(token.access_token)
             .send()
-            .await?
-            .error_for_status()?
+            .await
+            .check_status()?
             .json::<AccountCenterSettings>()
-            .await?)
+            .await
+            .map_err(ManagementApiError::RequestFailed)
     }
 }

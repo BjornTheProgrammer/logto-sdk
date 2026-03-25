@@ -1,0 +1,158 @@
+use serde::Deserialize;
+use serde_json::Value;
+
+use crate::management_api::{LogtoClient, ManagementApiError, ResponseExt};
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizationColor {
+    pub primary_color: Option<String>,
+    pub is_dark_mode_enabled: Option<bool>,
+    pub dark_primary_color: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizationBranding {
+    pub logo_url: Option<String>,
+    pub dark_logo_url: Option<String>,
+    pub favicon: Option<String>,
+    pub dark_favicon: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Organization {
+    pub tenant_id: String,
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub custom_data: Value,
+    pub is_mfa_required: bool,
+    pub color: OrganizationColor,
+    pub branding: OrganizationBranding,
+    pub custom_css: Option<String>,
+    pub created_at: i64,
+    pub organization_roles: Vec<OrganizationRole>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizationRole {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizationUser {
+    pub id: String,
+    pub username: Option<String>,
+    pub primary_email: Option<String>,
+    pub primary_phone: Option<String>,
+    pub name: Option<String>,
+    pub avatar: Option<String>,
+    pub created_at: i64,
+    pub last_sign_in_at: Option<i64>,
+    pub is_suspended: bool,
+    pub organization_roles: Vec<OrganizationRole>,
+}
+
+#[derive(Debug)]
+pub struct PaginatedResponse<T> {
+    pub data: Vec<T>,
+    pub total: u32,
+}
+
+pub struct Organizations<'a> {
+    pub client: &'a LogtoClient,
+}
+
+impl<'a> Organizations<'a> {
+    pub async fn get_for_user(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<Organization>, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .get(format!(
+                "{}/users/{}/organizations",
+                self.client.base_url(),
+                user_id
+            ))
+            .bearer_auth(token.access_token)
+            .send()
+            .await
+            .check_status()?
+            .json::<Vec<Organization>>()
+            .await
+            .map_err(ManagementApiError::RequestFailed)
+    }
+
+    pub async fn get(&self, org_id: &str) -> Result<Organization, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .get(format!(
+                "{}/organizations/{}",
+                self.client.base_url(),
+                org_id
+            ))
+            .bearer_auth(token.access_token)
+            .send()
+            .await
+            .check_status()?
+            .json::<Organization>()
+            .await
+            .map_err(ManagementApiError::RequestFailed)
+    }
+
+    pub async fn get_users(
+        &self,
+        org_id: &str,
+        page: Option<u32>,
+        page_size: Option<u32>,
+    ) -> Result<PaginatedResponse<OrganizationUser>, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+
+        let mut url = format!(
+            "{}/organizations/{}/users",
+            self.client.base_url(),
+            org_id
+        );
+        let mut query_parts: Vec<String> = Vec::new();
+        if let Some(p) = page {
+            query_parts.push(format!("page={}", p));
+        }
+        if let Some(ps) = page_size {
+            query_parts.push(format!("page_size={}", ps));
+        }
+        if !query_parts.is_empty() {
+            url = format!("{}?{}", url, query_parts.join("&"));
+        }
+
+        let response = self
+            .client
+            .http
+            .get(url)
+            .bearer_auth(token.access_token)
+            .send()
+            .await
+            .check_status()?;
+
+        let total = response
+            .headers()
+            .get("Total-Number")
+            .and_then(|v: &reqwest::header::HeaderValue| v.to_str().ok())
+            .and_then(|v: &str| v.parse::<u32>().ok())
+            .unwrap_or(0);
+
+        let data = response
+            .json::<Vec<OrganizationUser>>()
+            .await
+            .map_err(ManagementApiError::RequestFailed)?;
+
+        Ok(PaginatedResponse { data, total })
+    }
+}

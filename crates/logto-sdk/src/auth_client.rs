@@ -1,7 +1,8 @@
 use std::{
-    sync::Mutex,
+    sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::sync::Mutex;
 
 use reqwest::Client;
 use serde::Deserialize;
@@ -22,6 +23,7 @@ impl M2mCredentials {
     }
 }
 
+#[derive(Clone)]
 pub struct LogtoAuthClient {
     pub http: Client,
     pub token_endpoint: String,
@@ -89,6 +91,7 @@ impl LogtoAuthClient {
     }
 }
 
+#[derive(Clone)]
 pub struct TokenWithExpiry {
     pub token: TokenResponse,
     pub expires_at: Instant,
@@ -103,7 +106,7 @@ impl TokenWithExpiry {
 /// Caches the auth token and gives a new one if there is no valid token
 pub struct CachedToken {
     pub auth_client: LogtoAuthClient,
-    pub token: Mutex<Option<TokenWithExpiry>>,
+    pub token: Arc<Mutex<Option<TokenWithExpiry>>>,
     pub token_recieved: Instant,
     pub safety_buffer: Duration,
 }
@@ -112,7 +115,7 @@ impl CachedToken {
     pub fn new(auth_client: LogtoAuthClient) -> Self {
         Self {
             auth_client,
-            token: Mutex::new(None),
+            token: Arc::new(Mutex::new(None)),
             token_recieved: Instant::now(),
             safety_buffer: Duration::from_secs(1),
         }
@@ -120,14 +123,9 @@ impl CachedToken {
 
     /// Token is garunteed to be valid for at least 1 second
     pub async fn get_valid_token(&self) -> Result<TokenResponse, LogtoAuthError> {
-        let mut guard = self.token.lock().unwrap();
+        let mut guard = self.token.lock().await;
 
-        let needs_refresh = self
-            .token
-            .lock()
-            .unwrap()
-            .as_ref()
-            .is_none_or(|t| t.is_expired());
+        let needs_refresh = guard.as_ref().is_none_or(|t| t.is_expired());
 
         if needs_refresh {
             let start = Instant::now();

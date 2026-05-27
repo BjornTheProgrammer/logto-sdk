@@ -78,10 +78,10 @@ impl LogtoClient {
     }
 
     pub fn account_center<'a>(&'a self) -> AccountCenter<'a> {
-        AccountCenter { client: &self }
+        AccountCenter { client: self }
     }
 
     pub fn organizations<'a>(&'a self) -> Organizations<'a> {
-        Organizations { client: &self }
+        Organizations { client: self }
     }
 }

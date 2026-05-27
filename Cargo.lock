@@ -1651,7 +1651,7 @@ dependencies = [
 
 [[package]]
 name = "logto-sdk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actix-web",
  "axum",

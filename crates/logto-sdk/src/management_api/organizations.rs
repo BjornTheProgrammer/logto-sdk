@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::management_api::{LogtoClient, ManagementApiError, ResponseExt};
@@ -62,6 +62,23 @@ pub struct OrganizationUser {
 pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
     pub total: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchUser {
+    pub id: String,
+    pub primary_email: Option<String>,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Invitation {
+    pub id: String,
+    pub invitee: String,
+    pub status: String,
+    pub expires_at: i64,
 }
 
 pub struct Organizations<'a> {
@@ -154,5 +171,124 @@ impl<'a> Organizations<'a> {
             .map_err(ManagementApiError::RequestFailed)?;
 
         Ok(PaginatedResponse { data, total })
+    }
+
+    pub async fn add_user(&self, org_id: &str, user_id: &str) -> Result<(), ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .post(format!(
+                "{}/organizations/{}/users",
+                self.client.base_url(),
+                org_id
+            ))
+            .bearer_auth(token.access_token)
+            .json(&serde_json::json!({ "userIds": [user_id] }))
+            .send()
+            .await
+            .check_status()?;
+        Ok(())
+    }
+
+    pub async fn remove_user(
+        &self,
+        org_id: &str,
+        user_id: &str,
+    ) -> Result<(), ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .delete(format!(
+                "{}/organizations/{}/users/{}",
+                self.client.base_url(),
+                org_id,
+                user_id
+            ))
+            .bearer_auth(token.access_token)
+            .send()
+            .await
+            .check_status()?;
+        Ok(())
+    }
+
+    /// Searches for users by email prefix (up to 20 results).
+    pub async fn search_users(
+        &self,
+        email: &str,
+    ) -> Result<Vec<SearchUser>, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .get(format!("{}/users", self.client.base_url()))
+            .bearer_auth(token.access_token)
+            .query(&[("search", email), ("pageSize", "20")])
+            .send()
+            .await
+            .check_status()?
+            .json()
+            .await
+            .map_err(ManagementApiError::RequestFailed)
+    }
+
+    pub async fn invite_user(
+        &self,
+        org_id: &str,
+        invitee: &str,
+        inviter_id: &str,
+        expires_at: u64,
+    ) -> Result<(), ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .post(format!("{}/organization-invitations", self.client.base_url()))
+            .bearer_auth(token.access_token)
+            .json(&serde_json::json!({
+                "invitee": invitee,
+                "organizationId": org_id,
+                "inviterId": inviter_id,
+                "expiresAt": expires_at,
+            }))
+            .send()
+            .await
+            .check_status()?;
+        Ok(())
+    }
+
+    /// Lists all pending invitations for the given organization.
+    pub async fn list_invitations(
+        &self,
+        org_id: &str,
+    ) -> Result<Vec<Invitation>, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .get(format!("{}/organization-invitations", self.client.base_url()))
+            .bearer_auth(token.access_token)
+            .query(&[("organizationId", org_id), ("pageSize", "100")])
+            .send()
+            .await
+            .check_status()?
+            .json()
+            .await
+            .map_err(ManagementApiError::RequestFailed)
+    }
+
+    pub async fn cancel_invitation(
+        &self,
+        invitation_id: &str,
+    ) -> Result<(), ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .delete(format!(
+                "{}/organization-invitations/{}",
+                self.client.base_url(),
+                invitation_id
+            ))
+            .bearer_auth(token.access_token)
+            .send()
+            .await
+            .check_status()?;
+        Ok(())
     }
 }

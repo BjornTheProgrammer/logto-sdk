@@ -17,6 +17,10 @@ pub enum ManagementApiError {
     Unauthorized,
     #[error("Forbidden")]
     Forbidden,
+    #[error("Conflict: {0}")]
+    Conflict(String),
+    #[error("Unprocessable entity: {0}")]
+    UnprocessableEntity(String),
     #[error("API error: {0}")]
     ApiError(String),
     #[error("Request failed: {0}")]
@@ -43,16 +47,20 @@ pub trait ResponseExt {
 impl ResponseExt for Result<Response, reqwest::Error> {
     fn check_status(self) -> Result<Response, ManagementApiError> {
         let response = self.map_err(ManagementApiError::RequestFailed)?;
-        match response.status() {
-            StatusCode::OK => Ok(response),
-            StatusCode::UNAUTHORIZED => Err(ManagementApiError::Unauthorized),
-            StatusCode::FORBIDDEN => Err(ManagementApiError::Forbidden),
-            StatusCode::NOT_FOUND => Err(ManagementApiError::NotFound),
-            status => Err(ManagementApiError::ApiError(format!(
-                "Unexpected status: {}",
-                status
-            ))),
+        let status = response.status();
+        if status.is_success() {
+            return Ok(response);
         }
+        Err(match status {
+            StatusCode::UNAUTHORIZED => ManagementApiError::Unauthorized,
+            StatusCode::FORBIDDEN => ManagementApiError::Forbidden,
+            StatusCode::NOT_FOUND => ManagementApiError::NotFound,
+            StatusCode::CONFLICT => ManagementApiError::Conflict(status.to_string()),
+            StatusCode::UNPROCESSABLE_ENTITY => {
+                ManagementApiError::UnprocessableEntity(status.to_string())
+            }
+            s => ManagementApiError::ApiError(format!("Unexpected status: {s}")),
+        })
     }
 }
 

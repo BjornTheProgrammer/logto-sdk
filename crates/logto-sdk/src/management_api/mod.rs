@@ -3,11 +3,14 @@ use thiserror::Error;
 
 use crate::{
     auth_client::{CachedToken, LogtoAuthClient, LogtoAuthError, TokenResponse},
-    management_api::{account_center::AccountCenter, organizations::Organizations},
+    management_api::{
+        account_center::AccountCenter, organizations::Organizations, users::Users,
+    },
 };
 
 pub mod account_center;
 pub mod organizations;
+pub mod users;
 
 #[derive(Error, Debug)]
 pub enum ManagementApiError {
@@ -91,5 +94,9 @@ impl LogtoClient {
 
     pub fn organizations<'a>(&'a self) -> Organizations<'a> {
         Organizations { client: self }
+    }
+
+    pub fn users<'a>(&'a self) -> Users<'a> {
+        Users { client: self }
     }
 }

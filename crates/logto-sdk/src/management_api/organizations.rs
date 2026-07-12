@@ -33,6 +33,8 @@ pub struct Organization {
     pub branding: OrganizationBranding,
     pub custom_css: Option<String>,
     pub created_at: i64,
+
+    #[serde(default)]
     pub organization_roles: Vec<OrganizationRole>,
 }
 
@@ -86,6 +88,210 @@ pub struct Organizations<'a> {
 }
 
 impl<'a> Organizations<'a> {
+    pub async fn create(
+        &self,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<Organization, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        let mut body = serde_json::json!({ "name": name });
+        if let Some(d) = description {
+            body["description"] = d.into();
+        }
+        self.client
+            .http
+            .post(format!("{}/organizations", self.client.base_url()))
+            .bearer_auth(token.access_token)
+            .json(&body)
+            .send()
+            .await
+            .check_status()?
+            .json()
+            .await
+            .map_err(ManagementApiError::RequestFailed)
+    }
+
+    pub async fn delete(&self, org_id: &str) -> Result<(), ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .delete(format!(
+                "{}/organizations/{}",
+                self.client.base_url(),
+                org_id
+            ))
+            .bearer_auth(token.access_token)
+            .send()
+            .await
+            .check_status()?;
+        Ok(())
+    }
+
+    pub async fn list(
+        &self,
+        page: Option<u32>,
+        page_size: Option<u32>,
+    ) -> Result<PaginatedResponse<Organization>, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+
+        let mut url = format!("{}/organizations", self.client.base_url());
+        let mut query_parts: Vec<String> = Vec::new();
+        if let Some(p) = page {
+            query_parts.push(format!("page={}", p));
+        }
+        if let Some(ps) = page_size {
+            query_parts.push(format!("page_size={}", ps));
+        }
+        if !query_parts.is_empty() {
+            url = format!("{}?{}", url, query_parts.join("&"));
+        }
+
+        let response = self
+            .client
+            .http
+            .get(url)
+            .bearer_auth(token.access_token)
+            .send()
+            .await
+            .check_status()?;
+
+        let total = response
+            .headers()
+            .get("Total-Number")
+            .and_then(|v: &reqwest::header::HeaderValue| v.to_str().ok())
+            .and_then(|v: &str| v.parse::<u32>().ok())
+            .unwrap_or(0);
+
+        let data = response
+            .json::<Vec<Organization>>()
+            .await
+            .map_err(ManagementApiError::RequestFailed)?;
+
+        Ok(PaginatedResponse { data, total })
+    }
+
+    /// Lists the organization-template roles defined for the tenant.
+    pub async fn list_roles(
+        &self,
+        page: Option<u32>,
+        page_size: Option<u32>,
+    ) -> Result<Vec<OrganizationRole>, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+
+        let mut url = format!("{}/organization-roles", self.client.base_url());
+        let mut query_parts: Vec<String> = Vec::new();
+        if let Some(p) = page {
+            query_parts.push(format!("page={}", p));
+        }
+        if let Some(ps) = page_size {
+            query_parts.push(format!("page_size={}", ps));
+        }
+        if !query_parts.is_empty() {
+            url = format!("{}?{}", url, query_parts.join("&"));
+        }
+
+        self.client
+            .http
+            .get(url)
+            .bearer_auth(token.access_token)
+            .send()
+            .await
+            .check_status()?
+            .json()
+            .await
+            .map_err(ManagementApiError::RequestFailed)
+    }
+
+    /// Creates an organization-template role for the tenant.
+    pub async fn create_role(&self, name: &str) -> Result<OrganizationRole, ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .post(format!("{}/organization-roles", self.client.base_url()))
+            .bearer_auth(token.access_token)
+            .json(&serde_json::json!({ "name": name }))
+            .send()
+            .await
+            .check_status()?
+            .json()
+            .await
+            .map_err(ManagementApiError::RequestFailed)
+    }
+
+    /// Adds `role_ids` to each of `user_ids` in one call (Logto's additive
+    /// bulk endpoint — existing roles are kept, not replaced).
+    pub async fn assign_user_roles_bulk(
+        &self,
+        org_id: &str,
+        user_ids: &[&str],
+        role_ids: &[&str],
+    ) -> Result<(), ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .post(format!(
+                "{}/organizations/{}/users/roles",
+                self.client.base_url(),
+                org_id
+            ))
+            .bearer_auth(token.access_token)
+            .json(&serde_json::json!({
+                "userIds": user_ids,
+                "organizationRoleIds": role_ids,
+            }))
+            .send()
+            .await
+            .check_status()?;
+        Ok(())
+    }
+
+    /// Adds `role_ids` to one member (additive, like the bulk endpoint).
+    pub async fn assign_user_roles(
+        &self,
+        org_id: &str,
+        user_id: &str,
+        role_ids: &[&str],
+    ) -> Result<(), ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .post(format!(
+                "{}/organizations/{}/users/{}/roles",
+                self.client.base_url(),
+                org_id,
+                user_id
+            ))
+            .bearer_auth(token.access_token)
+            .json(&serde_json::json!({ "organizationRoleIds": role_ids }))
+            .send()
+            .await
+            .check_status()?;
+        Ok(())
+    }
+
+    pub async fn remove_user_role(
+        &self,
+        org_id: &str,
+        user_id: &str,
+        role_id: &str,
+    ) -> Result<(), ManagementApiError> {
+        let token = self.client.get_valid_token().await?;
+        self.client
+            .http
+            .delete(format!(
+                "{}/organizations/{}/users/{}/roles/{}",
+                self.client.base_url(),
+                org_id,
+                user_id,
+                role_id
+            ))
+            .bearer_auth(token.access_token)
+            .send()
+            .await
+            .check_status()?;
+        Ok(())
+    }
+
     pub async fn get_for_user(
         &self,
         user_id: &str,
@@ -133,11 +339,7 @@ impl<'a> Organizations<'a> {
     ) -> Result<PaginatedResponse<OrganizationUser>, ManagementApiError> {
         let token = self.client.get_valid_token().await?;
 
-        let mut url = format!(
-            "{}/organizations/{}/users",
-            self.client.base_url(),
-            org_id
-        );
+        let mut url = format!("{}/organizations/{}/users", self.client.base_url(), org_id);
         let mut query_parts: Vec<String> = Vec::new();
         if let Some(p) = page {
             query_parts.push(format!("page={}", p));
@@ -190,11 +392,7 @@ impl<'a> Organizations<'a> {
         Ok(())
     }
 
-    pub async fn remove_user(
-        &self,
-        org_id: &str,
-        user_id: &str,
-    ) -> Result<(), ManagementApiError> {
+    pub async fn remove_user(&self, org_id: &str, user_id: &str) -> Result<(), ManagementApiError> {
         let token = self.client.get_valid_token().await?;
         self.client
             .http
@@ -212,10 +410,7 @@ impl<'a> Organizations<'a> {
     }
 
     /// Searches for users by email prefix (up to 20 results).
-    pub async fn search_users(
-        &self,
-        email: &str,
-    ) -> Result<Vec<SearchUser>, ManagementApiError> {
+    pub async fn search_users(&self, email: &str) -> Result<Vec<SearchUser>, ManagementApiError> {
         let token = self.client.get_valid_token().await?;
         self.client
             .http
@@ -240,7 +435,10 @@ impl<'a> Organizations<'a> {
         let token = self.client.get_valid_token().await?;
         self.client
             .http
-            .post(format!("{}/organization-invitations", self.client.base_url()))
+            .post(format!(
+                "{}/organization-invitations",
+                self.client.base_url()
+            ))
             .bearer_auth(token.access_token)
             .json(&serde_json::json!({
                 "invitee": invitee,
@@ -262,7 +460,10 @@ impl<'a> Organizations<'a> {
         let token = self.client.get_valid_token().await?;
         self.client
             .http
-            .get(format!("{}/organization-invitations", self.client.base_url()))
+            .get(format!(
+                "{}/organization-invitations",
+                self.client.base_url()
+            ))
             .bearer_auth(token.access_token)
             .query(&[("organizationId", org_id), ("pageSize", "100")])
             .send()
@@ -273,10 +474,7 @@ impl<'a> Organizations<'a> {
             .map_err(ManagementApiError::RequestFailed)
     }
 
-    pub async fn cancel_invitation(
-        &self,
-        invitation_id: &str,
-    ) -> Result<(), ManagementApiError> {
+    pub async fn cancel_invitation(&self, invitation_id: &str) -> Result<(), ManagementApiError> {
         let token = self.client.get_valid_token().await?;
         self.client
             .http
